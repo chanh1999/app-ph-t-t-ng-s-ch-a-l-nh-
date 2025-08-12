@@ -18,22 +18,42 @@
     <input id="freq" type="number" value="440" min="20" max="20000" />
   </div>
   <button id="playBtn">Bắt đầu phát</button>
+  <button id="stopBtn" disabled>Dừng phát</button>
 
   <script>
-    const playBtn = document.getElementById('playBtn');
     let audioCtx;
+    let osc;
 
-    playBtn.addEventListener('click', () => {
-      const freq = Number(document.getElementById('freq').value) || 440;
+    const playBtn = document.getElementById('playBtn');
+    const stopBtn = document.getElementById('stopBtn');
+
+    playBtn.addEventListener('click', async () => {
       if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       }
-      const osc = audioCtx.createOscillator();
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume(); // iOS cần resume thủ công
+      }
+
+      const freq = Number(document.getElementById('freq').value) || 440;
+      osc = audioCtx.createOscillator();
       osc.type = 'sine';
       osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
       osc.connect(audioCtx.destination);
       osc.start();
-      osc.stop(audioCtx.currentTime + 2);
+
+      playBtn.disabled = true;
+      stopBtn.disabled = false;
+    });
+
+    stopBtn.addEventListener('click', () => {
+      if (osc) {
+        osc.stop();
+        osc.disconnect();
+        osc = null;
+      }
+      playBtn.disabled = false;
+      stopBtn.disabled = true;
     });
   </script>
 </body>
