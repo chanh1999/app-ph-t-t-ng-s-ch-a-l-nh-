@@ -1,67 +1,194 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Phát âm tần số liên tục</title>
-  <style>
-    body { font-family: Arial, sans-serif; text-align: center; padding-top: 50px; }
-    input, button { padding: 12px; font-size: 16px; margin: 8px; }
-    button { background-color: #4CAF50; color: white; border: none; border-radius: 6px; cursor: pointer; }
-    button:hover { background-color: #45a049; }
-    button:disabled { background-color: gray; cursor: not-allowed; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Máy phát tần số</title>
+<style>
+  body {
+    font-family: sans-serif;
+    background: #f4f4f4;
+    padding: 20px;
+  }
+  h1 {
+    text-align: center;
+  }
+  .box {
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    max-width: 400px;
+    margin: auto;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  }
+  input, button {
+    padding: 10px;
+    margin: 5px 0;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  button {
+    cursor: pointer;
+    background: #007BFF;
+    border: none;
+    color: white;
+    font-weight: bold;
+    border-radius: 5px;
+  }
+  button:hover {
+    background: #0056b3;
+  }
+  ul {
+    list-style: none;
+    padding: 0;
+  }
+  li {
+    background: #eee;
+    margin: 5px 0;
+    padding: 8px;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+</style>
 </head>
 <body>
-  <h1>Phát âm tần số liên tục</h1>
-  <div>
-    <label for="freq">Tần số (Hz):</label>
-    <input id="freq" type="number" value="440" min="20" max="20000" />
-  </div>
-  <button id="playBtn">Bắt đầu phát</button>
-  <button id="stopBtn" disabled>Dừng phát</button>
 
-  <script>
-    let audioCtx = null;
-    let osc = null;
-    let gainNode = null;
+<h1>Máy phát tần số</h1>
+<div class="box">
+  <input id="freqInput" type="number" placeholder="Tần số (Hz)">
+  <input id="timeInput" type="number" placeholder="Thời gian (giây)">
+  <button onclick="addFrequency()">Thêm tần số</button>
 
-    document.getElementById('playBtn').addEventListener('click', async () => {
-      if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      }
-      if (audioCtx.state === 'suspended') {
-        await audioCtx.resume(); // Quan trọng cho iOS
-      }
+  <ul id="freqList"></ul>
 
-      const freq = Number(document.getElementById('freq').value) || 440;
+  <button onclick="startSequence()">Bắt đầu</button>
+  <button onclick="pauseSequence()">Tạm dừng</button>
+  <button onclick="resumeSequence()">Tiếp tục</button>
+  <button onclick="stopAll()">Dừng</button>
+</div>
 
-      osc = audioCtx.createOscillator();
-      gainNode = audioCtx.createGain();
+<script>
+let audioCtx = null;
+let osc = null;
+let gainNode = null;
 
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+let freqList = [];  // Danh sách tần số + thời gian chạy
+let currentIndex = 0;
+let isPlaying = false;
+let timerId = null;
 
-      osc.connect(gainNode);
-      gainNode.connect(audioCtx.destination);
+// Hàm thêm tần số vào danh sách
+function addFrequency() {
+  const freq = parseFloat(document.getElementById("freqInput").value);
+  const duration = parseFloat(document.getElementById("timeInput").value);
+  if (!isNaN(freq) && !isNaN(duration) && freq > 0 && duration > 0) {
+    freqList.push({ freq, duration });
+    renderList();
+    document.getElementById("freqInput").value = "";
+    document.getElementById("timeInput").value = "";
+  } else {
+    alert("Vui lòng nhập tần số và thời gian hợp lệ!");
+  }
+}
 
-      osc.start();
+// Hiển thị danh sách tần số
+function renderList() {
+  const listEl = document.getElementById("freqList");
+  listEl.innerHTML = "";
+  freqList.forEach((item, index) => {
+    const li = document.createElement("li");
+    li.textContent = `Tần số: ${item.freq} Hz - Thời gian: ${item.duration}s`;
+    listEl.appendChild(li);
+  });
+}
 
-      document.getElementById('playBtn').disabled = true;
-      document.getElementById('stopBtn').disabled = false;
-    });
+// Bắt đầu phát
+function startSequence() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  audioCtx.resume();
 
-    document.getElementById('stopBtn').addEventListener('click', () => {
-      if (osc) {
-        osc.stop();
-        osc.disconnect();
-        gainNode.disconnect();
-        osc = null;
-        gainNode = null;
-      }
-      document.getElementById('playBtn').disabled = false;
-      document.getElementById('stopBtn').disabled = true;
-    });
-  </script>
+  if (freqList.length === 0) {
+    alert("Vui lòng thêm ít nhất 1 tần số!");
+    return;
+  }
+
+  currentIndex = 0;
+  isPlaying = true;
+  playCurrentFrequency();
+}
+
+// Phát tần số hiện tại
+function playCurrentFrequency() {
+  const item = freqList[currentIndex];
+  if (!item) {
+    stopAll();
+    return;
+  }
+
+  stopTone(); // Dừng tần số trước nếu có
+
+  osc = audioCtx.createOscillator();
+  gainNode = audioCtx.createGain();
+
+  osc.type = "sine"; // sóng sine
+  osc.frequency.setValueAtTime(item.freq, audioCtx.currentTime);
+
+  osc.connect(gainNode);
+  gainNode.connect(audioCtx.destination);
+
+  osc.start();
+
+  timerId = setTimeout(() => {
+    currentIndex++;
+    if (currentIndex < freqList.length && isPlaying) {
+      playCurrentFrequency();
+    } else {
+      stopAll();
+    }
+  }, item.duration * 1000);
+}
+
+// Dừng tần số hiện tại
+function stopTone() {
+  if (osc) {
+    osc.stop();
+    osc.disconnect();
+    gainNode.disconnect();
+    osc = null;
+    gainNode = null;
+  }
+  if (timerId) {
+    clearTimeout(timerId);
+    timerId = null;
+  }
+}
+
+// Tạm dừng
+function pauseSequence() {
+  if (audioCtx && isPlaying) {
+    audioCtx.suspend();
+    isPlaying = false;
+  }
+}
+
+// Tiếp tục
+function resumeSequence() {
+  if (audioCtx && !isPlaying) {
+    audioCtx.resume();
+    isPlaying = true;
+  }
+}
+
+// Dừng toàn bộ
+function stopAll() {
+  stopTone();
+  isPlaying = false;
+  currentIndex = 0;
+}
+</script>
+
 </body>
 </html>
+
