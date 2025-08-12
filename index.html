@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Tone Generator - App Tầng Số</title>
+  <style>
+    body{font-family:system-ui,Arial;max-width:720px;margin:24px auto;padding:16px}
+    label{display:block;margin-top:12px}
+    input[type=range]{width:100%}
+    .row{display:flex;gap:8px;align-items:center}
+    .small{font-size:0.9rem;color:#555}
+    button{padding:10px 16px;margin-top:12px}
+  </style>
+</head>
+<body>
+  <h1>App phát tầng số (Web)</h1>
+  <p class="small">Nhập tần số (Hz) hoặc kéo thanh để thay đổi. Nhấn "Start" — trình duyệt sẽ yêu cầu thao tác người dùng lần đầu.</p>
+
+  <label>Frequency (Hz):
+    <div class="row">
+      <input id="freq" type="number" min="20" max="22000" step="1" value="17000" />
+      <select id="preset">
+        <option value="">--Preset--</option>
+        <option value="1000">1 kHz</option>
+        <option value="4000">4 kHz</option>
+        <option value="17000">17 kHz (thử chống muỗi)</option>
+      </select>
+    </div>
+  </label>
+
+  <label>Slider:
+    <input id="freqRange" type="range" min="20" max="22000" step="1" value="17000" />
+  </label>
+
+  <label>Waveform:
+    <select id="wave">
+      <option value="sine">Sine</option>
+      <option value="square">Square</option>
+      <option value="sawtooth">Sawtooth</option>
+      <option value="triangle">Triangle</option>
+    </select>
+  </label>
+
+  <label>Volume:
+    <input id="vol" type="range" min="0" max="1" step="0.01" value="0.5" />
+  </label>
+
+  <button id="play">Start</button>
+  <button id="stop" style="margin-left:8px">Stop</button>
+
+  <p class="small">Lưu ý: một số điện thoại không thể phát tần số rất cao. Không dùng ở âm lượng lớn.</p>
+
+<script>
+  let audioCtx = null;
+  let osc = null;
+  let gain = null;
+  const freqInput = document.getElementById('freq');
+  const freqRange = document.getElementById('freqRange');
+  const playBtn = document.getElementById('play');
+  const stopBtn = document.getElementById('stop');
+  const waveSelect = document.getElementById('wave');
+  const vol = document.getElementById('vol');
+  const preset = document.getElementById('preset');
+
+  // sync inputs
+  freqInput.addEventListener('input', ()=> { freqRange.value = freqInput.value; updateFreq(); });
+  freqRange.addEventListener('input', ()=> { freqInput.value = freqRange.value; updateFreq(); });
+  preset.addEventListener('change', ()=> { if(preset.value) { freqInput.value = preset.value; freqRange.value = preset.value; updateFreq(); } });
+
+  function createContextIfNeeded() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+  }
+
+  function startTone() {
+    if (osc) return;
+    createContextIfNeeded();
+    // resume if suspended (required on mobile)
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    osc = audioCtx.createOscillator();
+    gain = audioCtx.createGain();
+    osc.type = waveSelect.value || 'sine';
+    osc.frequency.setValueAtTime(Number(freqInput.value), audioCtx.currentTime);
+    gain.gain.setValueAtTime(Number(vol.value), audioCtx.currentTime);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    playBtn.disabled = true;
+  }
+
+  function stopTone() {
+    if (!osc) return;
+    try {
+      osc.stop();
+    } catch(e){}
+    osc.disconnect();
+    gain.disconnect();
+    osc = null; gain = null;
+    playBtn.disabled = false;
+  }
+
+  function updateFreq() {
+    const f = Number(freqInput.value);
+    if (osc) osc.frequency.setValueAtTime(f, audioCtx.currentTime);
+  }
+
+  // update waveform/volume live
+  waveSelect.addEventListener('change', ()=> { if (osc) osc.type = waveSelect.value; });
+  vol.addEventListener('input', ()=> { if (gain) gain.gain.setValueAtTime(Number(vol.value), audioCtx.currentTime); });
+
+  playBtn.addEventListener('click', startTone);
+  stopBtn.addEventListener('click', stopTone);
+
+  // Ensure user gesture on mobile: call resume on first interaction
+  document.addEventListener('touchstart', function once(){ createContextIfNeeded(); document.removeEventListener('touchstart', once); }, {passive:true});
+</script>
+</body>
+</html>
