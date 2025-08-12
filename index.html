@@ -3,16 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Phát âm tần số</title>
+  <title>Phát âm tần số liên tục</title>
   <style>
     body { font-family: Arial, sans-serif; text-align: center; padding-top: 50px; }
     input, button { padding: 12px; font-size: 16px; margin: 8px; }
     button { background-color: #4CAF50; color: white; border: none; border-radius: 6px; cursor: pointer; }
     button:hover { background-color: #45a049; }
+    button:disabled { background-color: gray; cursor: not-allowed; }
   </style>
 </head>
 <body>
-  <h1>Phát âm tần số</h1>
+  <h1>Phát âm tần số liên tục</h1>
   <div>
     <label for="freq">Tần số (Hz):</label>
     <input id="freq" type="number" value="440" min="20" max="20000" />
@@ -21,41 +22,46 @@
   <button id="stopBtn" disabled>Dừng phát</button>
 
   <script>
-    let audioCtx;
-    let osc;
+    let audioCtx = null;
+    let osc = null;
+    let gainNode = null;
 
-    const playBtn = document.getElementById('playBtn');
-    const stopBtn = document.getElementById('stopBtn');
-
-    playBtn.addEventListener('click', async () => {
+    document.getElementById('playBtn').addEventListener('click', async () => {
       if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       }
       if (audioCtx.state === 'suspended') {
-        await audioCtx.resume(); // iOS cần resume thủ công
+        await audioCtx.resume(); // Quan trọng cho iOS
       }
 
       const freq = Number(document.getElementById('freq').value) || 440;
+
       osc = audioCtx.createOscillator();
+      gainNode = audioCtx.createGain();
+
       osc.type = 'sine';
       osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-      osc.connect(audioCtx.destination);
+
+      osc.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+
       osc.start();
 
-      playBtn.disabled = true;
-      stopBtn.disabled = false;
+      document.getElementById('playBtn').disabled = true;
+      document.getElementById('stopBtn').disabled = false;
     });
 
-    stopBtn.addEventListener('click', () => {
+    document.getElementById('stopBtn').addEventListener('click', () => {
       if (osc) {
         osc.stop();
         osc.disconnect();
+        gainNode.disconnect();
         osc = null;
+        gainNode = null;
       }
-      playBtn.disabled = false;
-      stopBtn.disabled = true;
+      document.getElementById('playBtn').disabled = false;
+      document.getElementById('stopBtn').disabled = true;
     });
   </script>
 </body>
 </html>
-
